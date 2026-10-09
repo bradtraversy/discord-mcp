@@ -30,6 +30,19 @@ describe('resolvePath', () => {
   it('returns undefined for a path that goes through null/undefined', () => {
     expect(resolvePath('step1.author.deep.deeper', vars)).toBeUndefined();
   });
+
+  it('returns undefined for empty or whitespace paths without leaking vars', () => {
+    expect(resolvePath('', vars)).toBeUndefined();
+    expect(resolvePath('   ', vars)).toBeUndefined();
+  });
+
+  it('blocks prototype access and inherited properties', () => {
+    expect(resolvePath('__proto__', vars)).toBeUndefined();
+    expect(resolvePath('prototype', vars)).toBeUndefined();
+    expect(resolvePath('constructor', vars)).toBeUndefined();
+    expect(resolvePath('toString', vars)).toBeUndefined();
+    expect(resolvePath('valueOf', vars)).toBeUndefined();
+  });
 });
 
 describe('interpolate', () => {
@@ -65,6 +78,11 @@ describe('interpolate', () => {
 
   it('returns undefined when a single-template references a missing path', () => {
     expect(interpolate('{{absent.var}}', vars)).toBeUndefined();
+  });
+
+  it('does not leak vars on empty placeholders', () => {
+    expect(interpolate('{{}}', vars)).toBe('{{}}');
+    expect(interpolate('{{   }}', vars)).toBe('{{   }}');
   });
 
   it('recurses into objects', () => {
@@ -106,5 +124,23 @@ describe('evalCondition', () => {
 
   it('strips outer {{ }} if present', () => {
     expect(evalCondition('step1.has_items', vars)).toBe(true);
+  });
+
+  it('returns false for empty or whitespace expressions', () => {
+    expect(evalCondition('', vars)).toBe(false);
+    expect(evalCondition('   ', vars)).toBe(false);
+    expect(evalCondition('{{}}', vars)).toBe(false);
+    expect(evalCondition('{{   }}', vars)).toBe(false);
+  });
+
+  it('evaluates boolean literals and negation correctly', () => {
+    expect(evalCondition('true', vars)).toBe(true);
+    expect(evalCondition('{{true}}', vars)).toBe(true);
+    expect(evalCondition('false', vars)).toBe(false);
+    expect(evalCondition('{{false}}', vars)).toBe(false);
+    expect(evalCondition('!false', vars)).toBe(true);
+    expect(evalCondition('!true', vars)).toBe(false);
+    expect(evalCondition('!{{step1.count}}', vars)).toBe(true);
+    expect(evalCondition('!step1.has_items', vars)).toBe(false);
   });
 });

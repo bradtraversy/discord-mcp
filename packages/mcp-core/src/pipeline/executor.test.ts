@@ -211,4 +211,30 @@ describe('executePipeline', () => {
     expect(result.aborted).toBe(true);
     expect(result.steps).toHaveLength(1);
   });
+  it('falls back to parsing text content as JSON or string when structuredContent is missing', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      isError: false,
+      content: [{ type: 'text', text: '{"parsed_id":"123"}' }],
+    });
+    const result = await executePipeline(
+      [{ id: 'fallback_step', tool: 'standard_tool', args: {} }],
+      invoke,
+      baseCtx,
+    );
+    expect(result.aborted).toBe(false);
+    expect(result.steps[0]!.status).toBe('success');
+    expect(result.variables.fallback_step).toEqual({ parsed_id: '123' });
+  });
+
+  it('protects against prototype pollution in step id or save_as', async () => {
+    const invoke = vi.fn().mockResolvedValue(ok({ secret: 'evil' }));
+    const result = await executePipeline(
+      [{ id: '__proto__', tool: 'messages_send', args: {}, save_as: 'constructor' }],
+      invoke,
+      baseCtx,
+    );
+    expect(result.aborted).toBe(false);
+    expect((Object.prototype as Record<string, unknown>).secret).toBeUndefined();
+    expect(result.variables.__proto__).toBeUndefined();
+  });
 });

@@ -1,6 +1,6 @@
 function singleTemplatePath(value: string): string | undefined {
   if (!value.startsWith('{{') || !value.endsWith('}}')) return undefined;
-  const path = value.slice(2, -2);
+  const path = value.slice(2, -2).trim();
   return path.length > 0 && !path.includes('}') ? path : undefined;
 }
 
@@ -43,10 +43,13 @@ export function resolvePath(path: string, vars: Record<string, unknown>): unknow
     .split('.')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+  if (segments.length === 0) return undefined;
   let cur: unknown = vars;
   for (const seg of segments) {
+    if (seg === '__proto__' || seg === 'prototype' || seg === 'constructor') return undefined;
     if (cur === null || cur === undefined) return undefined;
     if (typeof cur !== 'object') return undefined;
+    if (!Object.prototype.hasOwnProperty.call(cur, seg)) return undefined;
     cur = (cur as Record<string, unknown>)[seg];
   }
   return cur;
@@ -75,9 +78,17 @@ export function interpolate<T>(value: T, vars: Record<string, unknown>): T {
 }
 
 export function evalCondition(expr: string, vars: Record<string, unknown>): boolean {
-  const trimmed = expr.trim();
+  let trimmed = expr.trim();
+  let negated = false;
+  while (trimmed.startsWith('!')) {
+    negated = !negated;
+    trimmed = trimmed.slice(1).trim();
+  }
   const single = singleTemplatePath(trimmed);
   const path = single !== undefined ? single.trim() : trimmed;
+  if (path === 'true') return negated ? false : true;
+  if (path === 'false') return negated ? true : false;
   const value = resolvePath(path, vars);
-  return Boolean(value);
+  const result = Boolean(value);
+  return negated ? !result : result;
 }
