@@ -46,7 +46,7 @@ export async function executePipeline(
   invoke: InvokeFn,
   ctx: PipelineExecutorCtx,
 ): Promise<PipelineResult> {
-  const variables: Record<string, unknown> = {};
+  const variables: Record<string, unknown> = Object.create(null);
   const results: StepResult[] = [];
   const totalStart = performance.now();
   let aborted = ctx.signal.aborted;
@@ -88,9 +88,28 @@ export async function executePipeline(
           duration_ms: duration,
         };
       } else {
-        const data = callResult.structuredContent;
-        variables[id] = data;
-        if (step.save_as !== undefined) variables[step.save_as] = data;
+        let data: unknown = callResult.structuredContent;
+        if (data === undefined) {
+          const text = (callResult.content as Array<{ text?: string }> | undefined)?.[0]?.text;
+          if (typeof text === 'string') {
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = { text };
+            }
+          }
+        }
+        if (id !== '__proto__' && id !== 'constructor' && id !== 'prototype') {
+          variables[id] = data;
+        }
+        if (
+          step.save_as !== undefined &&
+          step.save_as !== '__proto__' &&
+          step.save_as !== 'constructor' &&
+          step.save_as !== 'prototype'
+        ) {
+          variables[step.save_as] = data;
+        }
         stepResult = {
           id,
           tool: step.tool,
